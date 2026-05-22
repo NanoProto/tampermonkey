@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
-// @namespace    asstars.tv
+// @namespace    http://tampermonkey.net/
 // @version      0.03
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
