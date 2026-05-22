@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    asstars.tv
-// @version      0.2
+// @version      0.03
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -27,8 +27,7 @@
     // =========================================================
     // STORAGE
     // =========================================================
-    const STORAGE_KEY = "UI_MODULES_V2";
-
+    const STORAGE_KEY = "UI_MODULES_V0.03";
     function loadState() {
         return GM_getValue(STORAGE_KEY, {
             headerMenu: false,
@@ -52,16 +51,12 @@
     // PROFILE
     // =========================================================
     function getProfileName() {
+        return document.querySelector('.lgn__name span')?.textContent?.trim() || null;
+    }
 
-        const profileLink = document.querySelector('a[href^="/user/"]');
-
-        if (!profileLink) {
-            return null;
-        }
-
-        const match = profileLink.pathname.match(/^\/user\/([^/]+)/);
-
-        return match ? match[1] : null;
+    function getProfileLink() {
+        const name = getProfileName();
+        return name ? `${location.origin}/user/${name}` : null;
     }
     // =========================================================
     // 1. HEADER MENU CONFIG
@@ -79,10 +74,7 @@
             auth: true
         },
         {
-            href: () => {
-                const name = getProfileName();
-                return name ? `/user/cards/?name=${name}` : '';
-            },
+            href: () => getProfileLink(),
             icon: "fal fa-layer-group",
             text: "Карты",
             auth: true
@@ -180,10 +172,8 @@
             .tabs__content .tabs__page--active .trade__inventory {overflow-y: unset !important; min-height: 200px !important; max-height: none !important;}
         `,
         tradeModalWide: `
-            /* затемнить фон */
-            .as-backdrop {position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9998;}
             /* окна трейда */
-            .ui-dialog[aria-describedby="trade-card-modal"] {position:fixed !important;top:50% !important; left:50% !important; transform:translate(-50%,-50%) !important; width:750px !important; max-height: none !important; margin:0 !important; z-index: 9999 !important;}
+            .ui-dialog[aria-describedby="trade-card-modal"] {position:fixed !important;top:50% !important; left:50% !important; transform:translate(-50%,-50%) !important; width:750px !important; max-height: none !important; margin:0 !important; z-index: 997 !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content {height: auto !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content .trade__main-divider {margin: 20px -16px !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content .trade__header,
@@ -205,16 +195,7 @@
         document.head.appendChild(style);
     }
     function disableStyle(name) {document.getElementById(`style-${name}`)?.remove();}
-    // модальное окно
-    function enableTradeBackdrop() {
-        if (document.querySelector(".as-backdrop")) return;
 
-        const el = document.createElement("div");
-        el.className = "as-backdrop";
-
-        document.body.appendChild(el);
-    }
-    function disableTradeBackdrop() {document.querySelector(".as-backdrop")?.remove();}
     // =========================================================
     // MODULE CONTROL
     // =========================================================
@@ -264,6 +245,16 @@
             }
         }
     }
+    function updateBackdropState() {
+
+        const hasModal = document.querySelector(
+            '.ui-dialog[aria-describedby="trade-card-modal"], ' +
+            '.ui-dialog[aria-describedby="card-modal"], ' +
+            '.settingsModuleModalUI[aria-describedby="settingsModuleModalUI-modal"]'
+        );
+
+        document.body.classList.toggle("as-modal-open", !!hasModal);
+    }
     // =========================================================
     // GLOBAL STYLES
     // =========================================================
@@ -294,91 +285,126 @@
         }
 
         /* =====================================================
+           GLOBAL BACKDROP
+        ===================================================== */
+        .settingsModalUI {
+            position: fixed;
+            inset: 0;
+            z-index: 998;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body.as-modal-open {position: relative;}
+        body.as-modal-open::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: var(--as-backdrop);
+            z-index: 996;
+        }
+
+        .wrapper-container .sect__content #dle-content {padding-bottom: 30px;}
+        .wrapper-container .sect__content .speedbar {border-radius: 12px !important; margin: auto !important; padding: 30px var(--indent) !important;}
+        /* =====================================================
            MODAL
         ===================================================== */
-        .backdrop {position: fixed; inset: 0; background: var(--as-backdrop); z-index: 9998;}
 
-        .modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+        .settingsModuleModalUI {
             width: 420px;
             background: var(--as-modal-bg);
             color: var(--as-modal-text);
             border: 1px solid var(--as-modal-border);
             border-radius: 8px;
-            z-index: 9999;
-            overflow: hidden;
+
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
         }
 
-        .modal-header {display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--as-modal-border);}
-        .modal-body {display: flex; flex-direction: column; gap: 12px; padding: 15px;}
+        .settingsModuleModalUI .modal-header {display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--as-modal-border);}
+        .settingsModuleModalUI .modal-body {display: flex; flex-direction: column; gap: 12px; padding: 15px;}
 
-        .row {display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--as-modal-row-bg);}
+        .settingsModuleModalUI .row {display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--as-modal-row-bg);}
 
         /* =====================================================
            SWITCH
         ===================================================== */
 
-        .switch {position: relative; width: 40px; height: 20px; background: var(--as-switch-bg); border-radius: 20px; cursor: pointer; transition: background 0.2s;}
-        .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #ffffff; border-radius: 50%; transition: transform 0.2s;}
+        .settingsModuleModalUI .switch {position: relative; width: 40px; height: 20px; background: var(--as-switch-bg); border-radius: 20px; cursor: pointer; transition: background 0.2s;}
+        .settingsModuleModalUI .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #ffffff; border-radius: 50%; transition: transform 0.2s;}
 
-        .modal input {display: none;}
-        .modal input:checked + .switch {background: #43b581;}
-        .modal input:checked + .switch::after {transform: translateX(20px);}
+        .settingsModuleModalUI input {display: none;}
+        .settingsModuleModalUI input:checked + .switch {background: #43b581;}
+        .settingsModuleModalUI input:checked + .switch::after {transform: translateX(20px);}
 
         /* =====================================================
            BUTTONS
         ===================================================== */
 
-        .save-btn {margin-top: 6px; padding: 10px; border: none; border-radius: 8px; background: #43b581; color: #ffffff; cursor: pointer; font-weight: 600; transition: opacity 0.2s;}
-        .save-btn:hover {opacity: 0.9;}
+        .settingsModuleModalUI .save-btn {margin-top: 6px; padding: 10px; border: none; border-radius: 8px; background: #43b581; color: #ffffff; cursor: pointer; font-weight: 600; transition: opacity 0.2s;}
+        .settingsModuleModalUI .save-btn:hover {opacity: 0.9;}
 
-        .close_btn {color: var(--tt); background-color: var(--bg-2); border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 1.9em; transition: background-color 0.2s; }
-        .close_btn:hover {color: #fff; background-color: #f06102; border-color: #f06102;}
-    `);
+        .settingsModuleModalUI .close_btn {color: var(--tt); background-color: var(--bg-2); border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 1.9em; transition: background-color 0.2s; }
+        .settingsModuleModalUI .close_btn:hover {color: #fff; background-color: #f06102; border-color: #f06102;}
+      `);
     }
     // =========================================================
     // SETTINGS MODAL
     // =========================================================
     function createSettingsModal() {
+
         const wrap = document.createElement("div");
-        wrap.id = "settings-wrap";
-        wrap.style.display = "none";
-        wrap.innerHTML = `
-            <div class="backdrop"></div>
-            <div class="modal">
-                <div class="modal-header">
-                    <span>Настройки</span>
-                    <button class="close_btn">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <span>Верхнее меню</span>
-                        <label><input type="checkbox" data-module="headerMenu"><div class="switch"></div></label>
-                    </div>
-                    <div class="row">
-                        <span>Расширить инвентарь</span>
-                        <label><input type="checkbox" data-module="inventoryExpand"><div class="switch"></div></label>
-                    </div>
-                    <div class="row">
-                        <span>Широкое окно трейда</span>
-                        <label><input type="checkbox" data-module="tradeModalWide"><div class="switch"></div></label>
-                    </div>
-                    <button class="save-btn">Сохранить</button>
-                </div>
+        wrap.className = "settingsModalUI";
+
+        const modal = document.createElement("div");
+        modal.className = "settingsModuleModalUI";
+        modal.setAttribute("aria-describedby", "settingsModuleModalUI-modal");
+
+        modal.innerHTML = `
+        <div class="modal-header">
+            <span>Настройки</span><button class="close_btn">×</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="row">
+                <span>Верхнее меню</span><label><input type="checkbox" data-module="headerMenu"><div class="switch"></div></label>
             </div>
+
+            <div class="row">
+                <span>Расширить инвентарь</span><label><input type="checkbox" data-module="inventoryExpand"><div class="switch"></div></label>
+            </div>
+
+            <div class="row">
+                <span>Широкое окно трейда</span><label><input type="checkbox" data-module="tradeModalWide"><div class="switch"></div></label>
+            </div>
+
+            <button class="save-btn">Сохранить</button>
+        </div>
         `;
 
-        const close = () => wrap.style.display = "none";
+        wrap.appendChild(modal);
 
-        wrap.querySelector(".close_btn").onclick = close;
-        wrap.querySelector(".backdrop").onclick = close;
+        const onKey = (e) => {
+            if (e.key === "Escape") close();
+        };
 
-        wrap.querySelector(".save-btn").onclick = () => {
-            wrap.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        document.addEventListener("keydown", onKey);
+
+        const close = () => {
+            document.body.classList.remove("as-modal-open");
+            wrap.remove();
+            settingsModal = null;
+        };
+
+        // КЛИК ПО ФОНУ
+        wrap.addEventListener("click", (e) => {
+            if (e.target === wrap) close();
+        });
+
+        modal.querySelector(".close_btn").onclick = close;
+
+        modal.querySelector(".save-btn").onclick = () => {
+            modal.querySelectorAll("input[type=checkbox]").forEach(cb => {
                 setModule(cb.dataset.module, cb.checked);
             });
 
@@ -389,51 +415,37 @@
     }
 
     function openSettingsModal() {
-        if (!settingsModal) {
-            settingsModal = createSettingsModal();
-            document.body.appendChild(settingsModal);
-        }
+        if (settingsModal) return;
 
-        // синхронизация чекбоксов
+        settingsModal = createSettingsModal();
+        document.body.appendChild(settingsModal);
+
+        document.body.classList.add("as-modal-open");
+
         settingsModal.querySelectorAll("input").forEach(cb => {
-            const key = cb.dataset.module;
-            cb.checked = !!state[key];
+            cb.checked = !!state[cb.dataset.module];
         });
-
-        settingsModal.style.display = "block";
     }
     // =========================================================
     // INIT
     // =========================================================
-    function watchTradeModal() {
+    function startGlobalModalObserver() {
         const observer = new MutationObserver(() => {
-            const modal = document.querySelector('.ui-dialog[aria-describedby="trade-card-modal"]');
-            const backdrop = document.querySelector('.as-backdrop');
-
-            if (modal && !backdrop) {
-                const el = document.createElement("div");
-                el.className = "as-backdrop";
-                document.body.appendChild(el);
-            }
-
-            if (!modal && backdrop) {
-                backdrop.remove();
-            }
+            updateBackdropState();
         });
-
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
+            attributes: true
         });
+        updateBackdropState();
     }
 
     function init() {
         injectGlobalStyles();
         applyInitialState();
 
-        if (state.tradeModalWide) {
-            watchTradeModal();
-        }
+        startGlobalModalObserver();
 
         GM_registerMenuCommand("Настройки", openSettingsModal);
     }
