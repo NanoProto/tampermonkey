@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.03
+// @version      0.04
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -29,7 +29,7 @@
     // =========================================================
     // STORAGE
     // =========================================================
-    const STORAGE_KEY = "UI_MODULES_V0.03";
+    const STORAGE_KEY = "UI_MODULES_V0.04";
     function loadState() {
         return GM_getValue(STORAGE_KEY, {
             headerMenu: false,
@@ -326,13 +326,14 @@
         .settingsModuleModalUI .modal-header {display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--as-modal-border);}
         .settingsModuleModalUI .modal-body {display: flex; flex-direction: column; gap: 12px; padding: 15px;}
 
-        .settingsModuleModalUI .row {display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--as-modal-row-bg);}
+        .settingsModuleModalUI .row {display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--as-modal-row-bg); content: unset;}
+        .settingsModuleModalUI .row span {width: 100%;}
 
         /* =====================================================
            SWITCH
         ===================================================== */
 
-        .settingsModuleModalUI .switch {position: relative; width: 40px; height: 20px; background: var(--as-switch-bg); border-radius: 20px; cursor: pointer; transition: background 0.2s;}
+        .settingsModuleModalUI .switch {position: relative; display: block; width: 40px; height: 20px; background: var(--as-switch-bg); border-radius: 20px; cursor: pointer; transition: background 0.2s;}
         .settingsModuleModalUI .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #ffffff; border-radius: 50%; transition: transform 0.2s;}
 
         .settingsModuleModalUI input {display: none;}
