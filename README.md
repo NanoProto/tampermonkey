@@ -6,5 +6,5 @@
 С Tampermonkey вы можете легко создавать, управлять и запускать эти пользовательские скрипты на любом веб-сайте, который вы посещаете.</p>
 
 
-tampermonkey/animesss/enlightenment.user.js - Помогает познать просветление на сайте AnimeSSS (.tv .com)
-да установки доступна ссылка https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
+<p>tampermonkey/animesss/enlightenment.user.js - Помогает познать просветление на сайте AnimeSSS (.tv .com)</p>
+<p>Для установки доступна ссылка https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js</p>
