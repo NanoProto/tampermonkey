@@ -4,6 +4,9 @@
 // @version      1.12
 // @description  Помогает познать просветление
 // @author       li4i
+// @match        *://*.asstars.tv/*
+// @match        *://*.astars.club/*
+// @match        *://*.asstars.club/*
 // @match        *://*.animesss.com/*
 // @match        *://*.animesss.tv/*
 // @match        *://*.animestars.org/*
