@@ -9,8 +9,8 @@
 // @match        *://*.animestars.org/*
 // @grant        none
 // @license      MIT
-// @downloadURL https://github.com/li4i/tampermonkey/blob/main/animesss/enlightenment.user.js
-// @updateURL https://github.com/li4i/tampermonkey/blob/main/animesss/enlightenment.user.js
+// @downloadURL https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
+// @updateURL https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
 // ==/UserScript==
 
 (function () {
