@@ -11,11 +11,11 @@
 // @match        *://*.animesss.tv/*
 // @match        *://*.animestars.org/*
 // @grant        none
-// @homepageURL https://github.com/li4i/tampermonkey
-// @supportURL https://github.com/li4i/tampermonkey/issues
+// @homepageURL  https://github.com/li4i/tampermonkey
+// @supportURL   https://github.com/li4i/tampermonkey/issues
 // @license      MIT
-// @downloadURL https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
-// @updateURL https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
+// @downloadURL  https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
+// @updateURL    https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
 // ==/UserScript==
 
 (function () {
