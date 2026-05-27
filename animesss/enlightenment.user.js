@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Animesss Просветление
+// @name         AnimeSSS Просветление
 // @namespace    http://tampermonkey.net/
-// @version      1.12
+// @version      1.16
 // @description  Помогает познать просветление
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -35,6 +35,11 @@
             autoCheck: 6 * 60 * 60 * 1000,
             statusCache: 30000
         },
+        // сколько и как долго пробуем
+        attempts: {
+            maxQuestCheckRetries: 3, // лимит попыток
+            retryDelay: 60 * 60 * 1000 // 60 минут между попытками
+        },
 
         selectors: {
             headerMenu: '.header__group-menu2',
@@ -54,6 +59,28 @@
 
         questName: 'Познать просветление'
     };
+    // =========================================================
+    // STATUS ENUMS
+    // =========================================================
+
+    const FETCH_STATUS = {
+        SUCCESS: 'success',
+        AUTH: 'auth',
+        BLOCKED: 'blocked',
+        ERROR: 'error'
+    };
+
+    const QUEST_STATUS = {
+        COMPLETED: 'completed',
+        ACTIVE: 'active',
+        NOT_FOUND: 'not_found',
+        BLOCKED: 'blocked',
+        ERROR: 'error'
+    };
+
+    // =========================================================
+    // LOG
+    // =========================================================
 
     const LOG = {
         log: true,
@@ -61,25 +88,33 @@
         error: true
     };
 
+    // =========================================================
+    // STATE
+    // =========================================================
+
     const STATE = {
         isRunning: false,
         authFailed: false,
 
         page: 1,
 
+        button: null,
+        notification: null,
+
         intervals: {
             status: null,
             autoCheck: null
         },
-
-        button: null,
-        notification: null,
 
         cache: {
             enlightenment: {
                 value: null,
                 time: 0
             }
+        },
+
+        questCheck: {
+            blockedUntilManual: false
         }
     };
 
@@ -89,7 +124,8 @@
 
     function logger(type, message, data = null) {
 
-        if (!LOG[type]) { return; }
+        if (!LOG[type]) return;
+
         const prefix = '[Просветление]';
 
         if (data !== null) {
@@ -104,6 +140,10 @@
     // =========================================================
 
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    function normalizeText(value) {
+        return String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
 
     function clearIntervals() {
 
@@ -159,9 +199,7 @@
 
     function isAuthorized() {
 
-        if (STATE.authFailed) {
-            return false;
-        }
+        if (STATE.authFailed) return false;
 
         const userHash =
               typeof window.dle_login_hash !== 'undefined' &&
@@ -191,7 +229,7 @@
 
     function createStyles() {
 
-        if (document.getElementById('enlightenment-styles')) { return; }
+        if (document.getElementById('enlightenment-styles')) return;
 
         const style = document.createElement('style');
         style.id = 'enlightenment-styles';
@@ -270,18 +308,14 @@
 
     function updateButtonState(active) {
 
-        if (!STATE.button) {
-            return;
-        }
+        if (!STATE.button) return;
 
         STATE.button.classList.toggle('active', active);
     }
 
     function createButton() {
 
-        if (STATE.button) {
-            return;
-        }
+        if (STATE.button) return;
 
         const target = document.querySelector(CONFIG.selectors.headerMenu);
 
@@ -302,8 +336,10 @@
         STATE.button.addEventListener('click', async () => {
 
             if (!isAuthorized()) {
-                logger('warn', 'Попытка запуска без авторизации');
-                showNotification('Необходимо войти в аккаунт');
+
+                stopScript({
+                    type: 'auth'
+                });
                 return;
             }
 
@@ -326,7 +362,13 @@
 
     async function fetchPage(url) {
 
-        if (!isAuthorized()) { return stopAuth(); }
+        if (!isAuthorized()) {
+
+            return {
+                ok: false,
+                status: FETCH_STATUS.AUTH
+            };
+        }
 
         try {
 
@@ -338,95 +380,161 @@
                 }
             });
 
-            if (response.status === 403) { return stopAuth(); }
+            if (response.status === 403) {
+
+                return {
+                    ok: false,
+                    status: FETCH_STATUS.AUTH
+                };
+            }
 
             if (response.status === 429) {
 
-                stopScript({
-                    type: 'blocked',
+                return {
+                    ok: false,
+                    status: FETCH_STATUS.BLOCKED,
                     message: 'Слишком много запросов'
-                });
-                return false;
+                };
             }
 
             if (response.status >= 500) {
 
-                stopScript({
-                    type: 'page_error',
+                return {
+                    ok: false,
+                    status: FETCH_STATUS.ERROR,
                     message: `Ошибка сервера (${response.status})`
-                });
-                return false;
+                };
             }
 
             if (!response.ok) {
 
-                logger('warn', `Ошибка запроса ${response.status}`, {url});
-                return false;
+                return {
+                    ok: false,
+                    status: FETCH_STATUS.ERROR,
+                    message: `Ошибка запроса (${response.status})`
+                };
             }
-            return response;
+
+            return {
+                ok: true,
+                response
+            };
 
         } catch (error) {
 
-            stopScript({
-                type: 'error',
+            return {
+                ok: false,
+                status: FETCH_STATUS.ERROR,
                 error
-            });
-            return false;
+            };
         }
     }
 
     // =========================================================
     // STATUS
     // =========================================================
+   async function getEnlightenmentStatus(force = false) {
 
-    async function getEnlightenmentStatus(force = false) {
+        if (STATE.questCheck.blockedUntilManual) {
+
+            return {
+                status: QUEST_STATUS.BLOCKED,
+                message: 'Проверка заблокирована'
+            };
+        }
 
         const now = Date.now();
+
         const cache = STATE.cache.enlightenment;
 
         if (!force && cache.value !== null && now - cache.time < CONFIG.delays.statusCache) {
-            return cache.value;
+
+            return {
+                status: cache.value ? QUEST_STATUS.COMPLETED : QUEST_STATUS.ACTIVE
+            };
         }
 
         const profileLink = getProfileLink();
 
-        if (!profileLink) { return false; }
+        if (!profileLink) {
 
-        const response = await fetchPage(profileLink);
-
-        if (!response) {
-            return null;
+            return {
+                status: QUEST_STATUS.ERROR,
+                message: 'Ссылка профиля не найдена'
+            };
         }
 
-        try {
+        for (let i = 0; i < CONFIG.attempts.maxQuestCheckRetries; i++) {
 
-            const html = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const questItems = doc.querySelectorAll(CONFIG.selectors.questItem);
-            const targetQuest = Array.from(questItems).find(item => {
-                const title = item.querySelector(CONFIG.selectors.questTitle);
-                return title?.textContent.includes(CONFIG.questName);
-            });
+            const attempt = i + 1;
+            const result = await fetchPage(profileLink);
 
-            if (!targetQuest) {
-                logger('warn', 'Квест не найден');
-                return null;
+            // логируем только повторные проверки после ошибки
+            if (!result.ok) {
+
+                logger('warn', `Ошибка получения профиля (${attempt})`);
+
+                if (attempt < CONFIG.attempts.maxQuestCheckRetries) {
+
+                    logger('log', `Повторная проверка квеста через ${CONFIG.attempts.retryDelay / 1000 / 60} мин (${attempt + 1}/${CONFIG.attempts.maxQuestCheckRetries})`);
+
+                    await sleep(CONFIG.attempts.retryDelay);
+                }
+                continue;
             }
 
-            const result = targetQuest.classList.contains('reward-activated');
+            if (!result.ok) {
 
-            STATE.cache.enlightenment = {
-                value: result,
-                time: now
-            };
+                logger('warn', `Ошибка получения профиля (${attempt})`);
 
-            return result;
+                if (attempt < CONFIG.attempts.maxQuestCheckRetries) {
+                    await sleep(CONFIG.attempts.retryDelay);
+                }
+                continue;
+            }
 
-        } catch (error) {
-            logger('error', 'Ошибка проверки статуса', error);
-            return null;
+            try {
+
+                const html = await result.response.text();
+                const doc = new DOMParser().parseFromString(html,'text/html');
+                const items = Array.from(doc.querySelectorAll(CONFIG.selectors.questItem));
+
+                const target = items.find(item => {
+
+                    const titleEl = item.querySelector(CONFIG.selectors.questTitle);
+                    if (!titleEl) return false;
+
+                    return normalizeText(titleEl.textContent).includes(normalizeText(CONFIG.questName));
+                });
+
+                if (target) {
+
+                    const completed = target.classList.contains('reward-activated');
+
+                    STATE.cache.enlightenment = {
+                        value: completed,
+                        time: Date.now()
+                    };
+
+                    return { status: completed ? QUEST_STATUS.COMPLETED : QUEST_STATUS.ACTIVE };
+                }
+
+            } catch (error) {
+
+                logger('error', `Ошибка обработки статуса (${attempt})`, error);
+            }
+
+            if (attempt < CONFIG.attempts.maxQuestCheckRetries) {
+                await sleep(CONFIG.attempts.retryDelay);
+            }
         }
+
+        STATE.questCheck.blockedUntilManual = true;
+
+        return {
+            status: QUEST_STATUS.NOT_FOUND,
+            message: 'Ошибка обработки квеста'
+        };
     }
 
     // =========================================================
@@ -436,11 +544,12 @@
     async function validateSession() {
 
         const profileLink = getProfileLink();
-        const response = await fetchPage(profileLink);
+        if (!profileLink) return false;
 
-        if (!profileLink) { return false; }
-        if (!response) { return false; }
-        return true;
+        const result = await fetchPage(profileLink);
+        if (!result) return false;
+
+        return result.ok;
     }
 
     // =========================================================
@@ -456,15 +565,21 @@
             // вывод в лог обрабатываемой страницы
             // logger('log', `Обработка страницы ${STATE.page}`);
 
-            const response = await fetchPage(pageUrl);
+            const pageResult = await fetchPage(pageUrl);
 
-            if (!response) { return; }
+            if (!pageResult.ok) {
+                stopScript({
+                    type: pageResult.status,
+                    message: pageResult.message
+                });
+
+                return;
+            }
 
             try {
 
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+                const html = await pageResult.response.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
                 const cardsContainer = doc.querySelector(CONFIG.selectors.cardsContainer);
 
                 if (!cardsContainer) {
@@ -480,7 +595,7 @@
                 const cards = doc.querySelectorAll(CONFIG.selectors.cardItem);
                 const cardIds = Array.from(cards).map(card => card.getAttribute('data-id')).filter(Boolean);
 
-                if (cardIds.length === 0) {
+                if (!cardIds.length) {
                     stopScript({
                         type: 'finished'
                     });
@@ -489,30 +604,56 @@
 
                 for (const cardId of cardIds) {
 
-                    if (!STATE.isRunning) { return; }
+                    if (!STATE.isRunning) return;
 
                     // вывод в лог обрабатываемой карты
                     // logger('log', `Карточка ${cardId}`);
 
                     const urls = [
-                        `/cards/users/?id=${cardId}/`,
-                        `/cards/users/trade/?id=${cardId}/`,
-                        `/cards/users/need/?id=${cardId}/`
+                        `/cards/users/?id=${cardId}`,
+                        `/cards/users/trade/?id=${cardId}`,
+                        `/cards/users/need/?id=${cardId}`
                     ];
 
                     for (const path of urls) {
-                        const success = await fetchPage(BASE_URL + path);
-                        if (!success || !STATE.isRunning) { return; }
+
+                        const result = await fetchPage(BASE_URL + path);
+
+                        if (!result.ok || !STATE.isRunning) {
+
+                            stopScript({
+                                type: result.status,
+                                message: result.message
+                            });
+
+                            return;
+                        }
+
                         await sleep(CONFIG.delays.request);
                     }
 
-                    const status = await getEnlightenmentStatus();
+                    const questResult = await getEnlightenmentStatus();
 
-                    if (status === true) {
-                        stopScript({
-                            type: 'success'
-                        });
-                        return;
+                    switch (questResult.status) {
+
+                        case QUEST_STATUS.COMPLETED:
+
+                            stopScript({
+                                type: 'success'
+                            });
+
+                            return;
+
+                        case QUEST_STATUS.NOT_FOUND:
+                        case QUEST_STATUS.ERROR:
+                        case QUEST_STATUS.BLOCKED:
+
+                            stopScript({
+                                type: 'blocked',
+                                message: questResult.message
+                            });
+
+                            return;
                     }
                 }
 
@@ -551,6 +692,10 @@
         }
 
         STATE.isRunning = true;
+        STATE.authFailed = false;
+
+        // сброс блокировки при ручном запуске
+        STATE.questCheck.blockedUntilManual = false;
 
         updateButtonState(true);
 
@@ -559,20 +704,33 @@
             const validSession = await validateSession();
 
             if (!validSession) {
-                stopAuth();
+
+                stopScript({
+                    type: 'auth'
+                });
+
                 return;
             }
 
-            const currentStatus = await getEnlightenmentStatus(true);
+            const questResult = await getEnlightenmentStatus(true);
 
-            if (currentStatus === true) {
+            if (questResult.status === QUEST_STATUS.COMPLETED) {
+
                 stopScript({
-                    type: 'success',
-                    message: 'Просветление уже получено'
+                    type: 'completed'
                 });
                 return;
             }
 
+            if (questResult.status === QUEST_STATUS.NOT_FOUND || questResult.status === QUEST_STATUS.ERROR || questResult.status === QUEST_STATUS.BLOCKED) {
+
+                stopScript({
+                    type: 'blocked',
+                    message: questResult.message
+                });
+
+                return;
+            }
             STATE.page = 1;
 
             logger('log', 'Поиск просветления...');
@@ -580,9 +738,11 @@
 
             STATE.intervals.status = setInterval(
                 async () => {
-                    const status = await getEnlightenmentStatus(true);
+                    const result = await getEnlightenmentStatus(true);
+                    if (!STATE.isRunning || result === null) return;
 
-                    if (status === true) {
+                    if (result.status === QUEST_STATUS.COMPLETED) {
+
                         stopScript({
                             type: 'success'
                         });
@@ -608,6 +768,8 @@
 
     function stopScript(data = {}) {
 
+        if (!STATE.isRunning && data.type !== 'auth') return;
+
         const {
             type = 'manual',
             message = '',
@@ -621,42 +783,70 @@
 
         switch (type) {
 
-            case 'success':
-                logger('log', message || 'Просветление получено');
-                showNotification('Просветление получено!');
+            case 'success':{
+                const text = message || 'Просветление успешно получено';
+                logger('log', text);
+                showNotification(text);
                 break;
+            }
 
-            case 'manual':
-                logger('log', 'Скрипт остановлен вручную');
-                showNotification('Скрипт остановлен');
+            case 'completed': {
+                const text = message || 'Просветление уже получено';
+                logger('log', text);
+                showNotification(text);
                 break;
+            }
 
-            case 'finished':
-                logger('log', message || 'Страницы закончились');
-                showNotification('Страницы закончились');
+            case 'manual': {
+                const text = 'Скрипт остановлен вручную';
+                logger('log', text);
+                showNotification(text);
                 break;
+            }
 
-            case 'page_error':
-                logger('error', message || 'Ошибка страницы', data);
-                showNotification('Ошибка загрузки страницы');
+            case 'finished': {
+                const text = message || 'Страницы закончились';
+                logger('log', text);
+                showNotification(text);
                 break;
+            }
 
-            case 'blocked':
-                logger('warn', message || 'Сработала защита сайта');
-                showNotification('Возможно сработала защита сайта');
+            case 'page_error': {
+                const text = message || 'Ошибка загрузки страницы';
+                logger('error', text, error || data);
+                showNotification(text);
                 break;
+            }
 
-            case 'auth':
-                logger('warn', 'Требуется авторизация');
-                showNotification('Требуется авторизация');
+            case 'blocked': {
+                const text = `${message}, возможно сработала защита сайта`;
+                logger('warn', text);
+                showNotification(text);
                 break;
+            }
 
-            case 'error':
-                logger('error', message || 'Неизвестная ошибка', error || data);
-                showNotification('Скрипт остановлен из-за ошибки');
+            case 'auth': {
+                STATE.authFailed = true;
+
+                const text = 'Необходимо войти в аккаунт';
+                logger('warn', text);
+                showNotification(text);
+
                 break;
+            }
 
-            default: logger('warn', 'Неизвестный тип остановки', data);
+            case 'error': {
+                const text = message || 'Скрипт остановлен из-за ошибки';
+                logger('error', text, error || data);
+                showNotification(text);
+                break;
+            }
+
+            default: {
+                const text = 'Неизвестный тип остановки';
+                logger('warn', text, data);
+                showNotification(text);
+            }
         }
     }
 
@@ -671,11 +861,9 @@
             return;
         }
 
-        STATE.authFailed = false;
+        const result = await getEnlightenmentStatus(true);
 
-        const status = await getEnlightenmentStatus(true);
-
-        if (status === true) {
+        if (result.status === QUEST_STATUS.COMPLETED) {
 
             logger('log', 'Просветление уже выполнено');
 
@@ -691,6 +879,7 @@
         logger('log', 'Задание активно');
 
         if (!STATE.isRunning) {
+            logger('log', 'Запуск автоматической проверки');
             await startScript();
         }
     }
@@ -705,13 +894,10 @@
             localStorage.setItem(CONFIG.storage.lastCheck, now);
         }
 
-        STATE.intervals.autoCheck = setInterval(
-            async () => {
+        STATE.intervals.autoCheck = setInterval(async () => {
                 await autoCheck();
                 localStorage.setItem(CONFIG.storage.lastCheck, Date.now());
-            },
-            CONFIG.delays.autoCheck
-        );
+        }, CONFIG.delays.autoCheck);
     }
 
     // =========================================================
