@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.06
+// @version      0.061
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -262,11 +262,11 @@
             .footer {flex-shrink: 0;}
 
             /* правки speedbar */
-            .page-padding {display: flex; flex-direction: column; height: 100%;}
-            .page-padding .sect__content {display: flex; flex-direction: column; height: 100%;}
-            .page-padding .sect__content #dle-content {flex: 1 1 auto;}
+            .wrapper-container .content .page-padding {display: flex; flex-direction: column; height: 100%; padding: var(--indent) var(--indent) 0 var(--indent);}
+            .wrapper-container .content .page-padding .sect__content {display: flex; flex-direction: column; height: 100%;}
+            .wrapper-container .content .page-padding .sect__content #dle-content {flex: 1 1 auto;}
 
-            .wrapper-container .content .page-padding .speedbar {margin: 0 !important;}
+            .wrapper-container .content .page-padding .speedbar {margin: 0 -30px; border-radius: unset;}
             .wrapper-container .content .page-padding .sect__content .speedbar {border-radius: 0 !important; margin: 30px -30px 0px -30px !important;}
             /* правки похожие аниме по жанру, из-за display: flex; ранее */
             .wrapper-container .content .page-padding #dle-content .sect__content {display: grid;}
