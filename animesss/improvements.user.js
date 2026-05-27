@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.04
+// @version      0.06
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -14,6 +14,7 @@
 // @grant        GM_setValue
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
+// @run-at       document-start
 // @homepageURL  https://github.com/li4i/tampermonkey
 // @supportURL   https://github.com/li4i/tampermonkey/issues
 // @license      MIT
@@ -25,6 +26,7 @@
     'use strict';
 
     let settingsModal = null;
+    let syncTimer = null;
 
     // =========================================================
     // STORAGE
@@ -34,7 +36,11 @@
         return GM_getValue(STORAGE_KEY, {
             headerMenu: false,
             inventoryExpand: false,
-            tradeModalWide: false
+            tradeModalWide: false,
+
+            smallFixes: false,
+            tradeColumns: false,
+            fullWidth: false
         });
     }
     function saveState(state) {GM_setValue(STORAGE_KEY, state);}
@@ -55,7 +61,6 @@
     function getProfileName() {
         return document.querySelector('.lgn__name span')?.textContent?.trim() || null;
     }
-
     function getProfileLink() {
         const name = getProfileName();
         return name ? `${location.origin}/user/${name}` : null;
@@ -122,9 +127,23 @@
                 #header-bookmarks {top: 110px !important;}
             }
             #header-bookmarks {
-                position: fixed; top: 65px; left: 0; right: 0; z-index: 28; margin: 0 auto; max-width: calc(var(--max-width, 1285px) - 50px); width: calc(100% - 24px); pointer-events: none; padding: 2px 12px;
-                display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 8px; border-radius: 0px 0px 8px 8px;
-                background:linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 100%);
+                position: fixed;
+                top: 65px;
+                left: 0;
+                right: 0;
+                margin: 0 auto;
+                max-width: calc(var(--as-layout-width) - 24px);
+                width: calc(var(--as-layout-width) - 24px);
+                pointer-events: none;
+                padding: 2px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+                border-radius: 0px 0px 8px 8px;
+                background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 100%);
+                z-index: 28;
             }
             #header-bookmarks a {
                 pointer-events: auto; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
@@ -168,13 +187,33 @@
     // 2. STYLE MODULES (CSS PATCHES)
     // =========================================================
     const STYLE_REGISTRY = {
+
+        // широкий сайт
+        fullWidth: `
+            :root {
+                 --as-layout-width: min(95vw, 1900px);
+            }
+
+            header.header,
+            .wrapper-container {
+                 width: var(--as-layout-width) !important;
+                 max-width: var(--as-layout-width) !important;
+            }
+            /* правка карусели */
+            .carou .owl-item {
+                 width: clamp(180px, 15vw, 240px) !important;
+            }
+        `,
+
+        //
         inventoryExpand: `
             .remelt__inventory {max-height: none !important;}
             .card-inventory-container .card-stars-list {max-height: none; none !important;}
             .tabs__content .tabs__page--active .trade__inventory {overflow-y: unset !important; min-height: 200px !important; max-height: none !important;}
         `,
+
+        // окна трейда
         tradeModalWide: `
-            /* окна трейда */
             .ui-dialog[aria-describedby="trade-card-modal"] {position:fixed !important;top:50% !important; left:50% !important; transform:translate(-50%,-50%) !important; width:750px !important; max-height: none !important; margin:0 !important; z-index: 997 !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content {height: auto !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content .trade__main-divider {margin: 20px -16px !important;}
@@ -182,6 +221,71 @@
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content .trade__main{padding: 5px !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-content .trade__main-user{padding-left: 5px !important; margin-bottom: 5px !important;}
             .ui-dialog[aria-describedby="trade-card-modal"] .ui-dialog-titlebar {cursor: default;}
+        `,
+
+        // трейд в несколько колонок
+        tradeColumns: `
+            .trade__list_columns {display: flex; flex-direction: row; column-count: 2; flex-wrap: wrap; width: 100%; gap: 30px; justify-content: center;}
+
+             /*  */
+             @media screen and (min-width: 769px) {
+                 .history .history__inner .history__list .history__item .history__body-item {width: 150px !important;}
+                 .history .history__inner .history__list .history__item .history__body-item img {width: 150px !important;}
+             }
+
+            .history .history__inner {width: 100% !important; max-width: 100% !important;}
+            .history .history__inner .history__list {display: flex; flex-direction: row; column-count: 2; flex-wrap: wrap; width: 100%; gap: 30px; justify-content: center;}
+            .history .history__inner .history__list .history__item {width: 570px !important;}
+        `,
+
+        // трейд в несколько колонок
+        tradeColumnsHistory: `
+             @media screen and (min-width: 769px) {
+                 .history__inner .history__list .history__item .history__body-item {width: 150px !important;}
+                 .history__inner .history__list .history__item .history__body-item img {width: 150px !important;}
+             }
+            .history__inner {width: 100% !important; max-width: 100% !important;}
+            .history__inner .history__list {display: flex; flex-direction: row; column-count: 2; flex-wrap: wrap; width: 100%; gap: 30px; justify-content: center;}
+            .history__inner .history__list .history__item {width: 570px !important;}
+        `,
+
+        // мелкие фиксы
+        smallFixes: `
+             /* small fixes placeholder */
+            .usertabs,
+            .tabs__nav,
+            .tabs__nav .tabs__item {height: 36px; min-width: 36px; padding: 0 15px; gap: 5px; color: #e6e6e6; transform: none !important; transition: none !important;}
+
+            /* опускаем footer */
+            .wrapper-container {min-height: calc(100vh - 100px);display: flex;flex-direction: column;}
+            .content {flex: 1 0 auto;}
+            .footer {flex-shrink: 0;}
+
+            /* правки speedbar */
+            .page-padding {display: flex; flex-direction: column; height: 100%;}
+            .page-padding .sect__content {display: flex; flex-direction: column; height: 100%;}
+            .page-padding .sect__content #dle-content {flex: 1 1 auto;}
+
+            .wrapper-container .content .page-padding .speedbar {margin: 0 !important;}
+            .wrapper-container .content .page-padding .sect__content .speedbar {border-radius: 0 !important; margin: 30px -30px 0px -30px !important;}
+            /* правки похожие аниме по жанру, из-за display: flex; ранее */
+            .wrapper-container .content .page-padding #dle-content .sect__content {display: grid;}
+
+            /* правки плеера и блока режим кинотеатра */
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__block {padding: 10px 30px !important;}
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__block .b-rgstats__help {right: 30px;}
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__list {padding: 5px 0;}
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-player {padding-top: 0 !important; border-radius: 20px; margin: 0 30px;}
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-player .room__player .iframe-container {border-radius: 20px; margin: 0 !important;}
+
+            /* правки блока режим кинотеатра */
+            .wrapper-container .content .page-padding .pmovie__player .pbtm .pbtm__main {margin: 10px 30px 0 30px !important;}
+
+            /* оценка видео */
+            .wrapper-container .content .page-padding .pmovie__related .multirating-wrapper {padding: 0; margin-top: 10px;}
+            .wrapper-container .content .page-padding .pmovie__related .multirating-wrapper .multirating-items-wrapper {display: inline-flex; flex-wrap: wrap; justify-content: center; max-width: 100%; width: 100%; padding-top: 10px;}
+            .wrapper-container .content .page-padding .pmovie__related .multirating-wrapper .multirating-items-wrapper .multirating-item {width: auto; }
+            .wrapper-container .content .page-padding .pmovie__related .multirating-wrapper .multirating-itog {margin: 0;}
         `
     };
 
@@ -194,10 +298,21 @@
         style.id = id;
         style.textContent = STYLE_REGISTRY[name];
 
-        document.head.appendChild(style);
+        (document.head || document.documentElement).appendChild(style);
     }
     function disableStyle(name) {document.getElementById(`style-${name}`)?.remove();}
-
+    // =========================================================
+    // 3. трейд в несколько колонок
+    // =========================================================
+    function applyTradeColumns(enabled) {
+        document.querySelectorAll(".trade .trade__inner .trade__list").forEach(el => {
+            el.classList.toggle("trade__list_columns", enabled);
+        });
+    }
+    function syncTradeColumns() {
+        const enabled = state.tradeColumns && !!document.querySelector(".trade__list");
+        applyTradeColumns(enabled);
+    }
     // =========================================================
     // MODULE CONTROL
     // =========================================================
@@ -216,6 +331,29 @@
             enabled: false,
             enable: () => enableStyle("tradeModalWide"),
             disable: () => disableStyle("tradeModalWide")
+        },
+        smallFixes: {
+            enabled: false,
+            enable: () => enableStyle("smallFixes"),
+            disable: () => disableStyle("smallFixes")
+        },
+
+        fullWidth: {
+            enabled: false,
+            enable: () => enableStyle("fullWidth"),
+            disable: () => disableStyle("fullWidth")
+        },
+
+        tradeColumns: {
+            enabled: false,
+            enable: () => {
+                enableStyle("tradeColumns");
+                applyTradeColumns(true);
+            },
+            disable: () => {
+                disableStyle("tradeColumns");
+                applyTradeColumns(false);
+            }
         }
     };
 
@@ -286,29 +424,16 @@
             --as-backdrop: rgba(0,0,0,0.72);
         }
 
+        :root {
+            --as-layout-width: var(--max-width, 1285px);
+        }
+
         /* =====================================================
            GLOBAL BACKDROP
         ===================================================== */
-        .settingsModalUI {
-            position: fixed;
-            inset: 0;
-            z-index: 998;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        .settingsModalUI {position: fixed; inset: 0; z-index: 998; display: flex; align-items: center; justify-content: center;}
         body.as-modal-open {position: relative;}
-        body.as-modal-open::after {
-            content: "";
-            position: fixed;
-            inset: 0;
-            background: var(--as-backdrop);
-            z-index: 996;
-        }
-
-        .wrapper-container .sect__content #dle-content {padding-bottom: 30px;}
-        .wrapper-container .sect__content .speedbar {border-radius: 12px !important; margin: auto !important; padding: 30px var(--indent) !important;}
+        body.as-modal-open::after {content: ""; position: fixed; inset: 0; background: var(--as-backdrop); z-index: 996;}
         /* =====================================================
            MODAL
         ===================================================== */
@@ -370,15 +495,31 @@
 
         <div class="modal-body">
             <div class="row">
-                <span>Верхнее меню</span><label><input type="checkbox" data-module="headerMenu"><div class="switch"></div></label>
+                <span>Широкий сайт</span>
+                <label><input type="checkbox" data-module="fullWidth"><div class="switch"></div></label>
+            </div>
+            <div class="row">
+                <span>Верхнее меню</span><label>
+                <input type="checkbox" data-module="headerMenu"><div class="switch"></div></label>
             </div>
 
             <div class="row">
-                <span>Расширить инвентарь</span><label><input type="checkbox" data-module="inventoryExpand"><div class="switch"></div></label>
+                <span>Расширить инвентарь</span>
+                <label><input type="checkbox" data-module="inventoryExpand"><div class="switch"></div></label>
             </div>
 
             <div class="row">
-                <span>Широкое окно трейда</span><label><input type="checkbox" data-module="tradeModalWide"><div class="switch"></div></label>
+                <span>Трейд в несколько колонок</span>
+                <label><input type="checkbox" data-module="tradeColumns"><div class="switch"></div></label>
+            </div>
+
+            <div class="row">
+                <span>Широкое окно трейда</span>
+                <label><input type="checkbox" data-module="tradeModalWide"><div class="switch"></div></label>
+            </div>
+            <div class="row">
+                <span>Небольшие фиксы</span>
+                <label><input type="checkbox" data-module="smallFixes"><div class="switch"></div></label>
             </div>
 
             <button class="save-btn">Сохранить</button>
@@ -416,7 +557,6 @@
 
         return wrap;
     }
-
     function openSettingsModal() {
         if (settingsModal) return;
 
@@ -432,31 +572,38 @@
     // =========================================================
     // INIT
     // =========================================================
-    function startGlobalModalObserver() {
-        const observer = new MutationObserver(() => {
+    function scheduleSync() {
+        clearTimeout(syncTimer);
+
+        syncTimer = setTimeout(() => {
             updateBackdropState();
-        });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true
-        });
-        updateBackdropState();
+            syncTradeColumns();
+        }, 250); // можно 50–100ms
     }
 
-    function init() {
-        injectGlobalStyles();
-        applyInitialState();
+    function startGlobalModalObserver() {
+        const observer = new MutationObserver(scheduleSync);
 
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    injectGlobalStyles();
+
+    if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", () => {
+            applyInitialState();
+            startGlobalModalObserver();
+
+            GM_registerMenuCommand("Настройки", openSettingsModal);
+        });
+    } else {
+        applyInitialState();
         startGlobalModalObserver();
 
         GM_registerMenuCommand("Настройки", openSettingsModal);
-    }
-
-    if (document.readyState === "loading") {
-        window.addEventListener("DOMContentLoaded", init);
-    } else {
-        init();
     }
 
 })();
