@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.061
+// @version      0.062
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -251,10 +251,14 @@
 
         // мелкие фиксы
         smallFixes: `
+             :root {
+                  --as-page-padding: 30px;
+             }
+
              /* small fixes placeholder */
             .usertabs,
             .tabs__nav,
-            .tabs__nav .tabs__item {height: 36px; min-width: 36px; padding: 0 15px; gap: 5px; color: #e6e6e6; transform: none !important; transition: none !important;}
+            .tabs__nav .tabs__item {transform: none !important; transition: none !important;}
 
             /* опускаем footer */
             .wrapper-container {min-height: calc(100vh - 100px);display: flex;flex-direction: column;}
@@ -272,6 +276,7 @@
             .wrapper-container .content .page-padding #dle-content .sect__content {display: grid;}
 
             /* правки плеера и блока режим кинотеатра */
+            .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-post__lastepisodeout {margin: 0 30px;}
             .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__block {padding: 10px 30px !important;}
             .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__block .b-rgstats__help {right: 30px;}
             .wrapper-container .content .page-padding .pmovie__player .tabs-block__content .b-translators__list {padding: 5px 0;}
