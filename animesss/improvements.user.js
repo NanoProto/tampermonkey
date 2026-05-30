@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.062
+// @version      0.064
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -59,16 +59,43 @@
     // PROFILE
     // =========================================================
     function getProfileName() {
-        return document.querySelector('.lgn__name span')?.textContent?.trim() || null;
+        return document.querySelector('.lgn__menus .lgn__name span')?.textContent?.trim() || null;
     }
     function getProfileLink() {
         const name = getProfileName();
         return name ? `${location.origin}/user/${name}` : null;
     }
+    function getCardLink() {
+        const name = getProfileName();
+        return name ? `${location.origin}/user/cards/?name=${name}` : null;
+    }
+    function getClubLink() {
+        const links = document.querySelectorAll('.lgn__menus .lgn__menu a');
+
+        for (const link of links) {
+            if (link.textContent.trim().includes('Мой клуб')) {
+                return link.href;
+            }
+        }
+
+        return null;
+    }
     // =========================================================
     // 1. HEADER MENU CONFIG
     // =========================================================
     const HEADER_MENU_LINKS = [
+        {
+            href: () => getProfileLink(),
+            icon: "fal fa-user",
+            text: "Профиль"
+        },
+        {
+            href: () => getClubLink(),
+            icon: "fal fa-ufo",
+            text: "Клуб",
+            auth: true,
+            visible: () => !!getClubLink()
+        },
         {
             href: "/cards/",
             icon: "fal fa-database",
@@ -81,7 +108,7 @@
             auth: true
         },
         {
-            href: () => getProfileLink(),
+            href: () => getCardLink(),
             icon: "fal fa-layer-group",
             text: "Карты",
             auth: true
@@ -97,7 +124,8 @@
             icon: "fal fa-gift",
             text: "Промо",
             auth: true
-        }
+        },
+
     ];
     // =========================================================
     // 1. HEADER MENU RENDER
@@ -106,12 +134,23 @@
 
         const authorized = isAuthorized();
 
-        return HEADER_MENU_LINKS.filter(item => !item.auth || authorized).map(item => {
-
-            const href = typeof item.href === "function" ? item.href() : item.href;
-            return `<a href="${href}"><i class="${item.icon}"></i><span>${item.text}</span></a>`;
-
-        }).join('');
+        return HEADER_MENU_LINKS
+            .map(item => ({
+                ...item,
+                resolvedHref: typeof item.href === "function" ? item.href() : item.href
+            }))
+            .filter(item => {
+               if (item.auth && !authorized) return false;
+               if (item.visible && !item.visible()) return false;
+               return !!item.resolvedHref;
+            })
+            .map(item =>
+                 `<a href="${item.resolvedHref}">
+                    <i class="${item.icon}"></i>
+                    <span>${item.text}</span>
+                 </a>`
+             )
+            .join('');
     }
     // =========================================================
     // 1. HEADER MENU STYLES
@@ -133,7 +172,7 @@
                 right: 0;
                 margin: 0 auto;
                 max-width: calc(var(--as-layout-width) - 24px);
-                width: calc(var(--as-layout-width) - 24px);
+                width: auto;
                 pointer-events: none;
                 padding: 2px 12px;
                 display: flex;
@@ -265,13 +304,19 @@
             .content {flex: 1 0 auto;}
             .footer {flex-shrink: 0;}
 
-            /* правки speedbar */
-            .wrapper-container .content .page-padding {display: flex; flex-direction: column; height: 100%; padding: var(--indent) var(--indent) 0 var(--indent);}
+            /* правки */
+            .wrapper-container .content .page-padding {display: flex; flex-direction: column; height: 100%;}
             .wrapper-container .content .page-padding .sect__content {display: flex; flex-direction: column; height: 100%;}
             .wrapper-container .content .page-padding .sect__content #dle-content {flex: 1 1 auto;}
 
-            .wrapper-container .content .page-padding .speedbar {margin: 0 -30px; border-radius: unset;}
-            .wrapper-container .content .page-padding .sect__content .speedbar {border-radius: 0 !important; margin: 30px -30px 0px -30px !important;}
+            .wrapper-container .content .page-padding .sect__content #dle-content .ncard,
+            .wrapper-container .content .page-padding .sect__content #dle-content .pagination {padding-bottom: 20px;}
+
+            .wrapper-container .content .col-main .page-padding .sect__content #dle-content .speedbar {margin: 0 -30px !important; border-radius: unset;}
+            .wrapper-container .content .col-main .page-padding .sect__content #dle-content:has(form) .speedbar {margin: 0 !important; border-radius: 12px;}
+            .wrapper-container .content .col-main .page-padding .speedbar {border-radius: unset;}
+            .wrapper-container .content .col-main .page-padding .sect__content .speedbar {margin: 0 var(--indent-negative) !important;}
+
             /* правки похожие аниме по жанру, из-за display: flex; ранее */
             .wrapper-container .content .page-padding #dle-content .sect__content {display: grid;}
 
