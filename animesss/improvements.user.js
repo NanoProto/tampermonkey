@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS UI улучшения
 // @namespace    http://tampermonkey.net/
-// @version      0.064
+// @version      0.066
 // @description  UI улучшения + фильтр мусора
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -15,11 +15,11 @@
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
 // @run-at       document-start
-// @homepageURL  https://github.com/li4i/tampermonkey
-// @supportURL   https://github.com/li4i/tampermonkey/issues
+// @homepageURL  https://github.com/NanoProto/tampermonkey
+// @supportURL   https://github.com/NanoProto/tampermonkey/issues
 // @license      MIT
-// @downloadURL  https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/improvements.user.js
-// @updateURL    https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/improvements.user.js
+// @downloadURL  https://raw.githubusercontent.com/NanoProto/tampermonkey/main/animesss/improvements.user.js
+// @updateURL    https://raw.githubusercontent.com/NanoProto/tampermonkey/main/animesss/improvements.user.js
 // ==/UserScript==
 
 (function () {
@@ -29,26 +29,11 @@
     let syncTimer = null;
 
     // =========================================================
-    // STORAGE
-    // =========================================================
-    const STORAGE_KEY = "UI_MODULES_V0.04";
-    function loadState() {
-        return GM_getValue(STORAGE_KEY, {
-            headerMenu: false,
-            inventoryExpand: false,
-            tradeModalWide: false,
-
-            smallFixes: false,
-            tradeColumns: false,
-            fullWidth: false
-        });
+    // DOMAIN
+    function getCurrentDomain() {
+        return `${window.location.protocol}//${window.location.hostname}`;
     }
-    function saveState(state) {GM_setValue(STORAGE_KEY, state);}
-
-    let state = loadState();
-    // =========================================================
     // AUTH
-    // =========================================================
     function isAuthorized() {
         return Boolean(
             document.querySelector('a[href*="/user/"]') &&
@@ -56,8 +41,84 @@
         );
     }
     // =========================================================
-    // PROFILE
+    // STORAGE
     // =========================================================
+    const STORAGE_KEY = "UI_MODULES_V0.04";
+    function loadState() {
+        return GM_getValue(STORAGE_KEY, {
+            headerMenu: false, // верхнее меню
+            inventoryExpand: false,
+            tradeModalWide: false,
+
+            smallFixes: false,
+            tradeColumns: false, // трейд в несколько колонок
+            fullWidth: false, // большая ширина
+            cardStars: false // звезды
+        });
+    }
+    function saveState(state) {GM_setValue(STORAGE_KEY, state);}
+
+    let state = loadState();
+    // =========================================================
+    // 1. HEADER MENU
+    // =========================================================
+    function enableHeaderMenu() {
+        const header = document.querySelector("header.header");
+        if (!header) return;
+
+        const id = "style-header-menu";
+
+        if (!document.getElementById(id)) {
+            const style = document.createElement("style");
+            style.id = id;
+
+            style.textContent = `
+            @media screen and (max-width: 950px) {
+                #header-bookmarks {top: 110px !important;}
+            }
+            #header-bookmarks {
+                position: fixed;
+                top: 65px;
+                left: 0;
+                right: 0;
+                margin: 0 auto;
+                max-width: calc(var(--as-layout-width) - 24px);
+                width: auto;
+                pointer-events: none;
+                padding: 2px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+                border-radius: 0px 0px 8px 8px;
+                background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 100%);
+                z-index: 28;
+            }
+            #header-bookmarks a {
+                pointer-events: auto; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
+                background-color: rgba(0,0,0,0.12); color: rgb(232,232,232) !important; text-decoration: none; transition: background-color 0.2s, border-color 0.2s;
+            }
+            #header-bookmarks a:hover {background-color: #f06102; border: 1px solid #f06102;}
+            #header-bookmarks a i {font-size: 14px; opacity: 0.95;}
+            `;
+
+            (document.head || document.documentElement).appendChild(style);
+        }
+
+        document.getElementById("header-bookmarks")?.remove();
+
+        const el = document.createElement("div");
+        el.id = "header-bookmarks";
+        el.innerHTML = buildHeaderMenu();
+
+        header.insertAdjacentElement("afterend", el);
+    }
+    function disableHeaderMenu() {
+        document.getElementById("header-bookmarks")?.remove();
+        document.getElementById("style-header-menu")?.remove();
+    }
+    // ================
     function getProfileName() {
         return document.querySelector('.lgn__menus .lgn__name span')?.textContent?.trim() || null;
     }
@@ -77,12 +138,9 @@
                 return link.href;
             }
         }
-
         return null;
     }
-    // =========================================================
-    // 1. HEADER MENU CONFIG
-    // =========================================================
+    // HEADER MENU CONFIG
     const HEADER_MENU_LINKS = [
         {
             href: () => getProfileLink(),
@@ -127,9 +185,7 @@
         },
 
     ];
-    // =========================================================
-    // 1. HEADER MENU RENDER
-    // =========================================================
+    // HEADER MENU RENDER
     function buildHeaderMenu() {
 
         const authorized = isAuthorized();
@@ -153,78 +209,23 @@
             .join('');
     }
     // =========================================================
-    // 1. HEADER MENU STYLES
+    // 2. STYLE MODULES (CSS PATCHES)
     // =========================================================
-    function injectStylesHeaderMenu() {
-
-        if (document.getElementById("style-header-menu")) { return; }
+    // расширители
+    function enableStyle(name) {
+        const id = `style-${name}`;
+        if (document.getElementById(id)) return;
 
         const style = document.createElement("style");
-        style.id = "style-header-menu";
-        style.textContent = `
-            @media screen and (max-width: 950px) {
-                #header-bookmarks {top: 110px !important;}
-            }
-            #header-bookmarks {
-                position: fixed;
-                top: 65px;
-                left: 0;
-                right: 0;
-                margin: 0 auto;
-                max-width: calc(var(--as-layout-width) - 24px);
-                width: auto;
-                pointer-events: none;
-                padding: 2px 12px;
-                display: flex;
-                align-items: center;
-                justify-content: flex-end;
-                flex-wrap: wrap;
-                gap: 6px 8px;
-                border-radius: 0px 0px 8px 8px;
-                background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 100%);
-                z-index: 28;
-            }
-            #header-bookmarks a {
-                pointer-events: auto; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
-                background-color: rgba(0,0,0,0.12); color: rgb(232,232,232) !important; text-decoration: none; transition: background-color 0.2s, border-color 0.2s;
-            }
-            #header-bookmarks a:hover {background-color: #f06102; border: 1px solid #f06102;}
-            #header-bookmarks a i {font-size: 14px; opacity: 0.95;}
-        `;
+        style.id = id;
+        style.textContent = STYLE_REGISTRY[name];
 
         (document.head || document.documentElement).appendChild(style);
     }
-    function removeStylesHeaderMenu() {document.getElementById("style-header-menu")?.remove();}
-    // =========================================================
-    // 1. HEADER MENU
-    // =========================================================
-    function enableHeaderMenu() {
-
-        const exists = document.getElementById("header-bookmarks");
-        if (exists) exists.remove(); // гарантируем чистое состояние
-
-        const header = document.querySelector("header.header");
-        if (!header) return;
-
-        if (!document.getElementById("style-header-menu")) {
-            injectStylesHeaderMenu();
-        }
-
-        //const rect = header.getBoundingClientRect();
-        const el = document.createElement("div");
-        //el.style.top = `${rect.bottom}px`;
-        el.id = "header-bookmarks";
-        el.innerHTML = buildHeaderMenu();
-
-        header.insertAdjacentElement("afterend", el);
+    function disableStyle(name) {
+        document.getElementById(`style-${name}`)?.remove();
     }
-    function disableHeaderMenu() {
-        document.getElementById("header-bookmarks")?.remove();
-        removeStylesHeaderMenu();
-    }
-    // =========================================================
-    // 2. STYLE MODULES (CSS PATCHES)
-    // =========================================================
+    // ================
     const STYLE_REGISTRY = {
 
         // широкий сайт
@@ -338,19 +339,6 @@
             .wrapper-container .content .page-padding .pmovie__related .multirating-wrapper .multirating-itog {margin: 0;}
         `
     };
-
-    // расширители
-    function enableStyle(name) {
-        const id = `style-${name}`;
-        if (document.getElementById(id)) return;
-
-        const style = document.createElement("style");
-        style.id = id;
-        style.textContent = STYLE_REGISTRY[name];
-
-        (document.head || document.documentElement).appendChild(style);
-    }
-    function disableStyle(name) {document.getElementById(`style-${name}`)?.remove();}
     // =========================================================
     // 3. трейд в несколько колонок
     // =========================================================
@@ -362,6 +350,98 @@
     function syncTradeColumns() {
         const enabled = state.tradeColumns && !!document.querySelector(".trade__list");
         applyTradeColumns(enabled);
+    }
+    // =========================================================
+    // 4. STARS IN CARD MODAL
+    // =========================================================
+    function enableCardStars() {
+        const id = "stars-card-modal-style";
+        if (document.getElementById(id)) return;
+
+        const style = document.createElement("style");
+        style.id = id;
+        style.textContent = `
+            .ui-dialog[aria-describedby="card-modal"] {width:620px !important; max-width: 680px !important; max-height: unset !important;}
+            .ui-dialog[aria-describedby="card-modal"] .ncard__meta-item .stars-rating {height: 19px;}
+            .ui-dialog[aria-describedby="card-modal"] .ncard__meta-item .stars-rating .fas,
+            .ui-dialog[aria-describedby="card-modal"] .ncard__meta-item .stars-rating .fal {
+                 position: relative; width: 19px; height: 19px; margin: 0;
+                 border-radius: unset; border: unset;
+                 left: unset; top: 1px; font-size: 14px;
+                 color: var(--tt-2); background-color: unset;
+             }
+             .ui-dialog[aria-describedby="card-modal"] .ncard__meta-item:hover .stars-rating .fas {color: var(--accent-gold);}
+        `;
+
+        (document.head || document.documentElement).appendChild(style);
+    }
+    function disableCardStars() {
+        document.getElementById("stars-card-modal-style")?.remove();
+
+        document
+            .querySelectorAll('.ui-dialog[aria-describedby="card-modal"] .ncard__stars')
+            .forEach(el => el.remove());
+    }
+    // ================
+    function getCardRankFromImage(dialog) {
+        const img = dialog.querySelector('.anime-cards__placeholder img');
+        if (!img?.src) return null;
+
+        const match = img.src.match(/cards_image\/\d+\/([^/]+)\//);
+        return match ? match[1] : null;
+    }
+    function getCardName(dialog) {
+        return dialog.querySelector('.anime-cards__name')?.textContent?.trim() || null;
+    }
+    function getCardStarsLevel(dialog) {
+        const img = dialog.querySelector('.anime-cards__placeholder img');
+        if (!img?.src) return null;
+
+        const match = img.src.match(/_stars_(\d+)\./);
+        return match ? match[1] : null;
+    }
+    function renderStars(starsCount) {
+        const count = parseInt(starsCount, 10) || 0;
+        let html = '<div class="stars-rating">';
+
+        for (let i = 1; i <= 5; i++) {
+            html += `<span class="${i <= count ? 'fas' : 'fal'} fa-star"></span>`;
+        }
+
+        html += '</div>';
+        return html;
+    }
+    function injectStarsInCardModal() {
+        if (!MODULES.cardStars?.enabled) return; // ВЫКЛЮЧЕНО
+
+        const dialog = document.querySelector('.ui-dialog[aria-describedby="card-modal"]');
+        if (!dialog) return;
+
+        const meta = dialog.querySelector('.ncard__meta');
+        if (!meta) return;
+
+        // уже добавлено — выходим
+        if (meta.querySelector('.ncard__stars')) return;
+
+        const stars = getCardStarsLevel(dialog) || "0";
+        const name = getCardName(dialog);
+        const rank = getCardRankFromImage(dialog);
+
+        const url = new URL(`${getCurrentDomain()}/update_stars/`);
+
+        if (rank) url.searchParams.set('rank', rank);
+        if (name) url.searchParams.set('search', name);
+
+        const starsHTML = `
+        <a href="${url.toString()}" class="ncard__meta-item ncard__stars" target="_blank" rel="noopener noreferrer">
+            <div>Звезды</div>
+            ${renderStars(stars)}
+            <span class="fal fa-stars pi-center"></span>
+        </a>
+        `;
+
+        // вставляем на: afterbegin - первое место / beforeend - в конец
+        meta.insertAdjacentHTML("afterbegin", starsHTML);
     }
     // =========================================================
     // MODULE CONTROL
@@ -404,6 +484,12 @@
                 disableStyle("tradeColumns");
                 applyTradeColumns(false);
             }
+        },
+        // звезды
+        cardStars: {
+            enabled: false,
+            enable: enableCardStars,
+            disable: disableCardStars
         }
     };
 
@@ -487,7 +573,6 @@
         /* =====================================================
            MODAL
         ===================================================== */
-
         .settingsModuleModalUI {
             width: 420px;
             background: var(--as-modal-bg);
@@ -568,6 +653,10 @@
                 <label><input type="checkbox" data-module="tradeModalWide"><div class="switch"></div></label>
             </div>
             <div class="row">
+                <span>Звезды в карточке</span>
+                <label><input type="checkbox" data-module="cardStars"><div class="switch"></div></label>
+            </div>
+            <div class="row">
                 <span>Небольшие фиксы</span>
                 <label><input type="checkbox" data-module="smallFixes"><div class="switch"></div></label>
             </div>
@@ -627,7 +716,8 @@
 
         syncTimer = setTimeout(() => {
             updateBackdropState();
-            syncTradeColumns();
+            syncTradeColumns(); // трейд в несколько колонок
+            injectStarsInCardModal(); // звезды
         }, 250); // можно 50–100ms
     }
 
