@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AnimeSSS Просветление
 // @namespace    http://tampermonkey.net/
-// @version      1.16
+// @version      1.17
 // @description  Помогает познать просветление
 // @author       li4i
 // @match        *://*.asstars.tv/*
@@ -11,11 +11,11 @@
 // @match        *://*.animesss.tv/*
 // @match        *://*.animestars.org/*
 // @grant        none
-// @homepageURL  https://github.com/li4i/tampermonkey
-// @supportURL   https://github.com/li4i/tampermonkey/issues
+// @homepageURL  https://github.com/NanoProto/tampermonkey
+// @supportURL   https://github.com/NanoProto/tampermonkey/issues
 // @license      MIT
-// @downloadURL  https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
-// @updateURL    https://raw.githubusercontent.com/li4i/tampermonkey/main/animesss/enlightenment.user.js
+// @downloadURL  https://raw.githubusercontent.com/NanoProto/tampermonkey/main/animesss/enlightenment.user.js
+// @updateURL    https://raw.githubusercontent.com/NanoProto/tampermonkey/main/animesss/enlightenment.user.js
 // ==/UserScript==
 
 (function () {
